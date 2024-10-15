@@ -8,6 +8,9 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+    concurrency:
+      group: deploy-html
+      cancel-in-progress: true
 
     steps:
     # リポジトリの内容をチェックアウト
@@ -25,37 +28,25 @@ jobs:
         python -m pip install --upgrade pip
         pip install beautifulsoup4
 
-    # modlist.htmlファイルとJSONデータの更新を実行
+    # script.pyを実行してmods_data.jsonとindex.htmlを生成
     - name: Run modlist update script
       run: |
         python script.py
 
-    # 未ステージの変更を一時的に保存してリベースする
-    - name: Stash any unstaged changes
-      run: |
-        git stash
-
-    # 最新のリモート変更をフェッチしてリベース
-    - name: Pull latest changes
-      run: |
-        git pull --rebase origin main
-
-    # 保存した未ステージの変更を復元
-    - name: Pop stashed changes
-      run: |
-        git stash pop
-
-    # Gitのユーザー名とメールアドレスを設定
-    - name: Set git user
+    # 生成されたファイルをGitHubにコミットしてプッシュ
+    - name: Commit and push changes
       run: |
         git config --local user.name "GitHub Action"
         git config --local user.email "action@github.com"
-
-    # 変更をGitHubにコミットしてプッシュ
-    - name: Commit and push changes
-      run: |
         git add index.html mods_data.json
         git commit -m "Update index.html and mods_data.json"
-        git push --force  # 競合があった場合の強制プッシュ
+        git push --force
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+    # GitHub Pagesにデプロイ
+    - name: Deploy to GitHub Pages
+      uses: peaceiris/actions-gh-pages@v3
+      with:
+        github_token: ${{ secrets.GITHUB_TOKEN }}
+        publish_dir: ./  # ルートディレクトリからデプロイ
