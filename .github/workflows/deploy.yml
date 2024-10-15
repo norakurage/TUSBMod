@@ -30,12 +30,20 @@ jobs:
       run: |
         python script.py
 
+    # 未ステージの変更を一時的に保存してリベースする
+    - name: Stash any unstaged changes
+      run: |
+        git stash
+
     # 最新のリモート変更をフェッチしてリベース
     - name: Pull latest changes
       run: |
-        git config --local user.email "action@github.com"
-        git config --local user.name "GitHub Action"
         git pull --rebase origin main
+
+    # 保存した未ステージの変更を復元
+    - name: Pop stashed changes
+      run: |
+        git stash pop
 
     # 変更をGitHubにコミットしてプッシュ
     - name: Commit and push changes
