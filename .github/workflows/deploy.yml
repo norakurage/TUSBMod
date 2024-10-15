@@ -57,3 +57,5 @@ jobs:
         git add index.html mods_data.json
         git commit -m "Update index.html and mods_data.json"
         git push --force  # 競合があった場合の強制プッシュ
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
