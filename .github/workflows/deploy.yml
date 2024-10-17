@@ -10,7 +10,7 @@ jobs:
     runs-on: ubuntu-latest
     concurrency:
       group: deploy-html
-      cancel-in-progress: true
+      cancel-in-progress: false
 
     steps:
     # リポジトリの内容をチェックアウト
