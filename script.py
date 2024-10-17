@@ -1,57 +1,127 @@
 import json
 from bs4 import BeautifulSoup
 from datetime import datetime
+import zipfile
+import os
 
-# JSONファイルからmodのデータを読み込む
+# 指定されたディレクトリから最初のzipファイルを見つける
+def find_zip_file(directory='.'):
+    for file_name in os.listdir(directory):
+        if file_name.endswith('.zip'):
+            return file_name
+    return None
+
+# zipファイルを解凍して指定ファイルを取得する
+def extract_file_from_zip(zip_file, file_to_extract):
+    with zipfile.ZipFile(zip_file, 'r') as zip_ref:
+        if file_to_extract in zip_ref.namelist():
+            zip_ref.extract(file_to_extract)
+            print(f"Extracted {file_to_extract} from {zip_file}.")
+            return file_to_extract
+        else:
+            print(f"{file_to_extract} not found in {zip_file}.")
+            return None
+
+# zipファイルからmodlist.htmlを解凍
+zip_file = find_zip_file()
+if zip_file:
+    modlist_html = extract_file_from_zip(zip_file, 'modlist.html')
+else:
+    print("No zip file found.")
+    modlist_html = None
+
+# JSONファイルの準備
 json_file = 'mods_data.json'
 try:
     with open(json_file, 'r', encoding='utf-8') as f:
         mods_data = json.load(f)
 except FileNotFoundError:
-    mods_data = {}  # ファイルが存在しない場合は空のデータ
+    print(f"{json_file} not found. Generating a new one.")
+    mods_data = {}
 
-# modlist.htmlファイルを読み込む
-with open("modlist.html", "r", encoding="utf-8") as file:
-    soup = BeautifulSoup(file, "html.parser")
+# modlist.htmlファイルが解凍されていれば処理を続行
+if modlist_html:
+    with open(modlist_html, "r", encoding="utf-8") as file:
+        soup = BeautifulSoup(file, "html.parser")
 
-# リンクを取得して更新
-mods = []
-for li in soup.find_all("li"):
-    a_tag = li.find("a")
-    mod_name = a_tag.get_text()
-    
-    # mod名が既にJSONファイルに存在する場合はその日付と時間を使う
-    if mod_name in mods_data:
-        mod_date_time = mods_data[mod_name]
-    else:
-        # 存在しない場合は現在の日時を追加し、JSONに記録
-        mod_date_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-        mods_data[mod_name] = mod_date_time
+    # HTML内に存在するModの名前リストを取得
+    html_mod_names = []
+    for li in soup.find_all("li"):
+        a_tag = li.find("a")
+        mod_name = a_tag.get_text()
+        html_mod_names.append(mod_name)
 
-    # リンクに/files/all?version=1.19.4を追加
-    href = a_tag['href'] + '/files/all?version=1.19.4'
-    a_tag['href'] = href
-    
-    # modのデータをリストに保存
-    mods.append({
-        'element': li,
-        'title': mod_name,
-        'date': mod_date_time
-    })
+    # 新しく追加されたModを格納するリスト
+    new_mods = []
+    updated_mods = []
 
-# 日付順に並び替え（時間も含めて）
-mods.sort(key=lambda mod: mod['date'], reverse=True)
+    # リンクを取得して更新
+    for li in soup.find_all("li"):
+        a_tag = li.find("a")
+        mod_name = a_tag.get_text()
 
-# 並び替えたmodを新しい順にhtmlに追加
-ul = soup.find("ul")
-ul.clear()  # 既存のリストをクリア
-for mod in mods:
-    ul.append(mod['element'])
+        # mod名が既にJSONファイルに存在する場合はその日付と時間を使う
+        if mod_name in mods_data:
+            mod_date_time = mods_data[mod_name]
+            updated_mods.append({
+                'element': li,
+                'title': mod_name,
+                'date': mod_date_time
+            })
+        else:
+            # 存在しない場合は現在の日時を追加し、JSONに記録
+            mod_date_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+            mods_data[mod_name] = mod_date_time
+            new_mods.append({
+                'element': li,
+                'title': mod_name,
+                'date': mod_date_time
+            })
 
-# 更新したindex.htmlを保存
-with open("index.html", "w", encoding="utf-8") as file:
-    file.write(str(soup))
+        # リンクに/files/all?version=1.19.4を追加
+        href = a_tag['href'] + '/files/all?version=1.19.4'
+        a_tag['href'] = href
 
-# JSONファイルに変更を保存
-with open(json_file, 'w', encoding='utf-8') as f:
-    json.dump(mods_data, f, ensure_ascii=False, indent=4)
+        # リンクの後に日付を追加
+        date_tag = soup.new_tag('span')
+        date_tag.string = f" (Last updated: {mod_date_time})"
+        li.append(date_tag)
+
+    # 新規Modと既存Modをまとめてソート（全ての日付でソート）
+    all_mods = updated_mods
+    all_mods.sort(key=lambda mod: mod['date'], reverse=True)
+
+    # `mods_data.json` にあるが `modlist.html` に存在しないModを削除
+    mods_to_remove = [mod for mod in mods_data if mod not in html_mod_names]
+    for mod in mods_to_remove:
+        print(f"Removing '{mod}' from {json_file} because it was deleted from HTML.")
+        del mods_data[mod]
+
+    # Modをulに挿入
+    ul = soup.find("ul")
+    ul.clear()  # 既存のリストをクリア
+
+    # 新しいModが存在する場合、区切り線と共に追加
+    if new_mods:
+        for new_mod in new_mods:
+            ul.append(new_mod['element'])  # 新しいModを挿入
+
+        # 区切り線を追加
+        separator_tag = soup.new_tag('li')
+        separator_tag.string = "New----------------------------------------------------------------------------------------"
+        ul.append(separator_tag)  # 区切り線を最後に挿入
+
+    # 既存のModを挿入
+    for mod in all_mods:
+        ul.append(mod['element'])
+
+    # 更新したindex.htmlを保存
+    with open("index.html", "w", encoding="utf-8") as file:
+        file.write(str(soup))
+
+    # JSONファイルに変更を保存
+    with open(json_file, 'w', encoding='utf-8') as f:
+        json.dump(mods_data, f, ensure_ascii=False, indent=4)
+
+else:
+    print("modlist.html was not found or could not be extracted.")
