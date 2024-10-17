@@ -1,8 +1,12 @@
 import json
 from bs4 import BeautifulSoup
 from datetime import datetime
+import pytz  # 追加
 import zipfile
 import os
+
+# 日本標準時（JST）のタイムゾーンを指定
+JST = pytz.timezone('Asia/Tokyo')
 
 # 指定されたディレクトリから最初のzipファイルを見つける
 def find_zip_file(directory='.'):
@@ -69,8 +73,8 @@ if modlist_html:
                 'date': mod_date_time
             })
         else:
-            # 存在しない場合は現在の日時を追加し、JSONに記録
-            mod_date_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+            # 現在の日時をJSTに変換して追加
+            mod_date_time = datetime.now(JST).strftime('%Y-%m-%d %H:%M')
             mods_data[mod_name] = mod_date_time
             new_mods.append({
                 'element': li,
@@ -84,7 +88,7 @@ if modlist_html:
 
         # リンクの後に日付を追加
         date_tag = soup.new_tag('span')
-        date_tag.string = f" (Last updated: {mod_date_time})"
+        date_tag.string = f" (導入日: {mod_date_time})"
         li.append(date_tag)
 
     # 新規Modと既存Modをまとめてソート（全ての日付でソート）
@@ -103,14 +107,19 @@ if modlist_html:
 
     # 新しいModが存在する場合、区切り線と共に追加
     if new_mods:
+        # 区切り線を追加
+        separator_tag = soup.new_tag('li')
+        separator_tag.string = "-------------------------------------最新の追加-------------------------------------"
+        ul.append(separator_tag)
+        
         for new_mod in new_mods:
             ul.append(new_mod['element'])  # 新しいModを挿入
 
         # 区切り線を追加
         separator_tag = soup.new_tag('li')
-        separator_tag.string = "New----------------------------------------------------------------------------------------"
-        ul.append(separator_tag)  # 区切り線を最後に挿入
-
+        separator_tag.string = "-------------------------------------既存の追加-------------------------------------"
+        ul.append(separator_tag)
+        
     # 既存のModを挿入
     for mod in all_mods:
         ul.append(mod['element'])
