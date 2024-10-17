@@ -33,13 +33,18 @@ jobs:
       run: |
         python script.py
 
+    # .nojekyllファイルを作成してJekyllを無効化
+    - name: Disable Jekyll
+      run: |
+        touch .nojekyll
+
     # 生成されたファイルをGitHubにコミットしてプッシュ
     - name: Commit and push changes
       run: |
         git config --local user.name "GitHub Action"
         git config --local user.email "action@github.com"
-        git add index.html mods_data.json
-        git commit -m "Update index.html and mods_data.json"
+        git add index.html mods_data.json .nojekyll
+        git commit -m "Update index.html, mods_data.json and disable Jekyll"
         git push --force
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
